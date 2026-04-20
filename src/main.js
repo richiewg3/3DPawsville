@@ -256,33 +256,38 @@ function applyGravity(delta) {
   grounded = false;
 }
 
+const CAMERA_OFFSET = new THREE.Vector3(0, 2.0, 5.0);
+const CAMERA_MIN_DIST = 2.6; // never get closer than this to the humanoid
+
 function updateCamera(delta) {
   yawPivot.position.copy(player.group.position).add(new THREE.Vector3(0, PLAYER_EYE_HEIGHT, 0));
   yawPivot.rotation.y = pointer.yaw;
   pitchPivot.rotation.x = pointer.pitch;
 
-  const desired = new THREE.Vector3(0, 2.0, 5.0)
+  const desired = CAMERA_OFFSET.clone()
     .applyQuaternion(pitchPivot.quaternion)
     .applyQuaternion(yawPivot.quaternion)
     .add(yawPivot.position);
 
-  // Pull the camera forward if geometry sits between it and the humanoid so
-  // the third-person view doesn't get buried inside a wall.
+  // Pull the camera toward the humanoid if geometry would otherwise sit
+  // between them — but never closer than CAMERA_MIN_DIST so the humanoid
+  // cannot collapse into the lens when the player stands against a wall.
   if (collidables.length > 0) {
     const from = yawPivot.position;
     const toDir = tmpVec.copy(desired).sub(from);
-    const dist = toDir.length();
+    const fullDist = toDir.length();
     toDir.normalize();
     rayMove.set(from, toDir);
     rayMove.near = 0;
-    rayMove.far = dist;
+    rayMove.far = fullDist;
     const hit = rayMove.intersectObjects(collidables, false);
     if (hit.length > 0) {
-      desired.copy(from).addScaledVector(toDir, Math.max(hit[0].distance - 0.25, 0.8));
+      const safeDist = Math.max(CAMERA_MIN_DIST, hit[0].distance - 0.3);
+      desired.copy(from).addScaledVector(toDir, safeDist);
     }
   }
 
-  camera.position.lerp(desired, 1 - Math.exp(-14 * delta));
+  camera.position.lerp(desired, 1 - Math.exp(-18 * delta));
   camera.lookAt(yawPivot.position);
 }
 

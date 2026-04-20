@@ -111,6 +111,11 @@ const sharedMaterial = new THREE.MeshStandardMaterial({
 });
 sharedMaterial.name = 'greybox';
 
+// The original OBJ was authored with +Y pointing *downward* (building tops are
+// at smaller Y values than street level). Flip every geometry around the X
+// axis so +Y becomes the expected "up" direction for Three.js.
+const flipMatrix = new THREE.Matrix4().makeRotationX(Math.PI);
+
 const geometries = [];
 let sourceMeshCount = 0;
 
@@ -118,10 +123,12 @@ objGroup.traverse((child) => {
   if (!child.isMesh) return;
   sourceMeshCount += 1;
   const geometry = child.geometry;
+  geometry.applyMatrix4(flipMatrix);
   if (geometry.attributes.uv) geometry.deleteAttribute('uv');
   if (geometry.attributes.uv2) geometry.deleteAttribute('uv2');
   if (geometry.attributes.color) geometry.deleteAttribute('color');
-  if (!geometry.attributes.normal) geometry.computeVertexNormals();
+  if (geometry.attributes.normal) geometry.deleteAttribute('normal');
+  geometry.computeVertexNormals();
   // Normalize attribute signatures so BufferGeometryUtils.mergeGeometries can
   // combine them — it requires every geometry to share the exact same set of
   // attributes.

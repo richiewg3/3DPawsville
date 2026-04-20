@@ -54,9 +54,10 @@ scene.add(sun);
 const player = buildGenericHumanoid();
 scene.add(player.group);
 
-// Spawn above origin; the map has been centered in the GLB pipeline and its
-// ground baseline is at y=0, so any reasonable height will drop onto the map.
-const SPAWN = new THREE.Vector3(0, 30, 0);
+// Spawn well above the map (total height ~84 units after scaling) so the
+// humanoid parachutes down and lands on the first exposed rooftop / street
+// surface instead of materialising inside interior geometry.
+const SPAWN = new THREE.Vector3(0, 200, 0);
 player.group.position.copy(SPAWN);
 
 // Player capsule shape used for ground/side collisions.
@@ -111,8 +112,11 @@ const collidables = [];
 let mapReady = false;
 
 const loader = new GLTFLoader();
+// Append a build-time version query so browsers cannot serve a stale map.glb
+// from an earlier (broken) asset pipeline run.
+const MAP_ASSET_URL = `/assets/map.glb?v=${import.meta.env?.DEV ? Date.now() : '1'}`;
 loader.load(
-  '/assets/map.glb',
+  MAP_ASSET_URL,
   (gltf) => {
     mapRoot = gltf.scene;
     mapRoot.traverse((obj) => {
@@ -225,12 +229,14 @@ function applyGravity(delta) {
   player.group.position.y += verticalVelocity * delta;
 
   // Ground raycast from slightly above the player's feet going straight down.
+  // `far` is generous so a fall from the initial skydive spawn (y≈200) still
+  // finds a rooftop to snap to on the first frame contact.
   const origin = tmpVec
     .copy(player.group.position)
     .add(new THREE.Vector3(0, 2.5, 0));
   rayDown.set(origin, new THREE.Vector3(0, -1, 0));
   rayDown.near = 0;
-  rayDown.far = 60; // deep enough to catch landings from jumps / small falls
+  rayDown.far = 400;
   const hits = rayDown.intersectObjects(collidables, false);
 
   if (hits.length > 0) {
@@ -242,8 +248,7 @@ function applyGravity(delta) {
       grounded = true;
       return;
     }
-  } else if (player.group.position.y < -400) {
-    // Safety net: if the humanoid falls into the void, respawn at the start.
+  } else if (player.group.position.y < -200) {
     player.group.position.copy(SPAWN);
     verticalVelocity = 0;
   }

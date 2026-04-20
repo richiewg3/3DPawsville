@@ -1,0 +1,58 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  background: #0f1722;
+}
+
+canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+#loading,
+#hud {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+#loading {
+  top: 24px;
+}
+
+#hud {
+  top: 90px;
+  text-align: center;
+}
+
+#hud p {
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+.hidden {
+  display: none;
+}

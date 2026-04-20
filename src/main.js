@@ -54,9 +54,9 @@ scene.add(sun);
 const player = buildGenericHumanoid();
 scene.add(player.group);
 
-// Spawn well above the map (total height ~84 units after scaling) so the
-// humanoid parachutes down and lands on the first exposed rooftop / street
-// surface instead of materialising inside interior geometry.
+// Initial spawn — well above the map. After the map loads we'll raycast
+// downward to find the topmost solid surface and drop the humanoid there so
+// it never spawns stuck inside interior geometry.
 const SPAWN = new THREE.Vector3(0, 200, 0);
 player.group.position.copy(SPAWN);
 
@@ -75,7 +75,13 @@ scene.add(yawPivot);
 // --- Input ------------------------------------------------------------------
 
 const keys = new Set();
-document.addEventListener('keydown', (e) => keys.add(e.code));
+document.addEventListener('keydown', (e) => {
+  keys.add(e.code);
+  if (e.code === 'KeyR' && mapReady) {
+    player.group.position.copy(SPAWN);
+    verticalVelocity = 0;
+  }
+});
 document.addEventListener('keyup', (e) => keys.delete(e.code));
 
 const pointer = { locked: false, yaw: 0, pitch: -0.15 };
@@ -131,6 +137,16 @@ loader.load(
       }
     });
     scene.add(mapRoot);
+
+    // Find a guaranteed-open landing spot: raycast straight down from high
+    // above different XZ offsets until we hit something and pick the point
+    // with the largest clear vertical gap above it (i.e. a rooftop or street
+    // rather than the underside of a roof).
+    const spawn = pickSpawnPoint();
+    SPAWN.copy(spawn);
+    player.group.position.copy(spawn);
+    verticalVelocity = 0;
+
     mapReady = true;
     loadingEl.textContent = 'Click to play — WASD to move, Space to jump.';
   },
@@ -248,7 +264,7 @@ function applyGravity(delta) {
       grounded = true;
       return;
     }
-  } else if (player.group.position.y < -200) {
+  } else if (player.group.position.y < -50) {
     player.group.position.copy(SPAWN);
     verticalVelocity = 0;
   }
@@ -324,4 +340,40 @@ function buildGenericHumanoid() {
 function lerpAngle(a, b, t) {
   const diff = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI;
   return a + diff * t;
+}
+
+function pickSpawnPoint() {
+  // Raycast from high above a grid of candidate XZ positions; pick the first
+  // hit whose clear sky (next face above) is tallest. Falls back to origin.
+  const caster = new THREE.Raycaster();
+  caster.far = 500;
+  const down = new THREE.Vector3(0, -1, 0);
+  const candidates = [];
+  const radii = [0, 10, 20, 40];
+  for (const r of radii) {
+    const steps = r === 0 ? 1 : 8;
+    for (let i = 0; i < steps; i += 1) {
+      const theta = (i / steps) * Math.PI * 2;
+      candidates.push([Math.cos(theta) * r, Math.sin(theta) * r]);
+    }
+  }
+
+  let best = null;
+  for (const [x, z] of candidates) {
+    caster.set(new THREE.Vector3(x, 300, z), down);
+    const hits = caster.intersectObjects(collidables, false);
+    if (hits.length === 0) continue;
+    // Use the *first* (topmost) hit. Prefer the candidate whose topmost
+    // surface is highest — that puts us on a rooftop or open street rather
+    // than under geometry.
+    const top = hits[0];
+    if (!best || top.point.y > best.point.y) {
+      best = top;
+    }
+  }
+
+  if (best) {
+    return new THREE.Vector3(best.point.x, best.point.y + 0.1, best.point.z);
+  }
+  return new THREE.Vector3(0, 60, 0);
 }

@@ -34,10 +34,10 @@ const objPath = objFiles.sort((a, b) => fs.statSync(b).size - fs.statSync(a).siz
 fs.mkdirSync(outDir, { recursive: true });
 
 console.log(`Converting ${path.relative(root, objPath)} -> ${path.relative(root, outFile)}`);
-await obj2gltf(objPath, {
+const glb = await obj2gltf(objPath, {
   binary: true,
   separate: false,
-  output: outFile,
 });
+fs.writeFileSync(outFile, glb);
 
 console.log('GLB conversion complete.');

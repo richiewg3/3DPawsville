@@ -64,8 +64,6 @@ const dragonPlayer = {
 };
 dragonPlayer.group.name = 'DragonPlayer';
 scene.add(dragonPlayer.group);
-// Expose for debugging from the browser console.
-if (typeof window !== 'undefined') window.dragonPlayer = dragonPlayer;
 
 // Initial spawn — well above the map. After the map loads we'll raycast
 // downward to find the topmost solid surface and drop the player there so it
@@ -113,6 +111,12 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => keys.delete(e.code));
 
 const pointer = { locked: false, yaw: 0, pitch: -0.15 };
+// Expose a couple of internals for debugging / scripted demos. Harmless in
+// production: it's a thin reference to existing live state.
+if (typeof window !== 'undefined') {
+  window.dragonPlayer = dragonPlayer;
+  window.__pointer = pointer;
+}
 
 renderer.domElement.addEventListener('click', () => {
   renderer.domElement.requestPointerLock();

@@ -33,7 +33,8 @@ Runs the same pipeline and produces a static `dist/` folder.
 
 ## Controls
 
-- `W A S D` — move (third-person camera follows the humanoid).
+- `W A S D` — move (third-person camera follows the dragon).
+- `Shift + W` — sprint (plays the `Running` clip).
 - Mouse — rotate camera (click the canvas once to acquire pointer lock).
 - `Space` — jump.
 - `R` — respawn at the initial landing point.
@@ -44,8 +45,10 @@ Runs the same pipeline and produces a static `dist/` folder.
   from reaching the GPU, so the map renders smoothly in a browser.
 - Frustum culling is enabled on every map chunk; each merged chunk has its own
   bounding sphere, so large parts of the map can be skipped per frame.
-- A generic low-poly humanoid figure (capsule torso, sphere head, cylindrical
-  limbs) is assembled procedurally and driven by gravity + ground / wall
-  raycasts against the map mesh.
-- On load, the humanoid is placed on the tallest rooftop returned by a
+- The player is a rigged Emerald Dragonling GLB driven by an `AnimationMixer`.
+  Idle / Walking / Running / Jump_Run clips are crossfaded based on input
+  state. Physics (gravity, ground / wall raycasts) act on the player's root
+  group, not the visual mesh, so movement and collisions are unaffected by the
+  swap from the previous procedural humanoid.
+- On load, the player is placed on the tallest rooftop returned by a
   downward raycast grid, then falls onto the surface below.

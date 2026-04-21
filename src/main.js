@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 // --- DOM references ---------------------------------------------------------
 
@@ -65,6 +64,8 @@ const dragonPlayer = {
 };
 dragonPlayer.group.name = 'DragonPlayer';
 scene.add(dragonPlayer.group);
+// Expose for debugging from the browser console.
+if (typeof window !== 'undefined') window.dragonPlayer = dragonPlayer;
 
 // Initial spawn — well above the map. After the map loads we'll raycast
 // downward to find the topmost solid surface and drop the player there so it
@@ -224,24 +225,34 @@ async function loadDragon() {
       gltfLoader.loadAsync(DRAGON_ANIMATIONS_URL),
     ]);
 
-    // SkeletonUtils.clone preserves the skinned-mesh bone bindings so the
-    // model still animates when re-parented; a plain `.clone()` would share
-    // and break the skeleton references.
-    const model = cloneSkinned(characterGltf.scene);
+    // Only one player exists, so we can take the GLTF scene root directly —
+    // bone bindings on the original skinned mesh remain intact. (If we ever
+    // need multiple dragon instances, use SkeletonUtils.clone here.)
+    const model = characterGltf.scene;
+    // The Meshy character bind-pose faces its local +Z axis. Three.js / the
+    // camera rig treat local -Z as "forward", so rotate the model 180° on Y
+    // to line the dragon's chest up with the direction the yaw controller
+    // turns the player toward. Without this, pressing W would walk the
+    // dragon backwards (with its chest facing the camera).
+    model.rotation.y = Math.PI;
     model.traverse((obj) => {
       if (obj.isMesh || obj.isSkinnedMesh) {
-        obj.frustumCulled = false; // skeletal bounds are unreliable post-skin
+        obj.frustumCulled = false; // skinned-pose bounds are unreliable
         obj.castShadow = false;
         obj.receiveShadow = false;
       }
     });
 
-    // Compute the model's natural height in its bind pose so we can scale it
-    // to match the gameplay-defined PLAYER_HEIGHT and the city scale.
+    // Compute the model's natural height in its bind pose. Box3.setFromObject
+    // traverses meshes and uses their `matrixWorld`, so we must propagate the
+    // armature's internal (sub-)scale into every descendant first. A freshly
+    // cloned hierarchy has an out-of-date matrixWorld and would otherwise
+    // report raw centimeter geometry bounds (~150 units tall for this model).
+    model.updateMatrixWorld(true);
     const naturalBox = new THREE.Box3().setFromObject(model);
     const naturalSize = new THREE.Vector3();
     naturalBox.getSize(naturalSize);
-    const naturalHeight = Math.max(naturalSize.y, 0.001);
+    const naturalHeight = naturalSize.y > 0.01 ? naturalSize.y : 1.6;
     const scale = PLAYER_HEIGHT / naturalHeight;
     model.scale.setScalar(scale);
 
@@ -250,7 +261,14 @@ async function loadDragon() {
     model.updateMatrixWorld(true);
     const scaledBox = new THREE.Box3().setFromObject(model);
     model.position.y -= scaledBox.min.y;
-    dragonPlayer.modelHeight = scaledBox.max.y - scaledBox.min.y;
+    dragonPlayer.modelHeight = Math.max(
+      scaledBox.max.y - scaledBox.min.y,
+      PLAYER_HEIGHT,
+    );
+
+    console.log(
+      `[dragon] natural bbox = ${naturalSize.x.toFixed(2)}x${naturalSize.y.toFixed(2)}x${naturalSize.z.toFixed(2)}, applied scale = ${scale.toFixed(3)}, model height = ${dragonPlayer.modelHeight.toFixed(2)}`,
+    );
 
     dragonPlayer.group.add(model);
     dragonPlayer.model = model;
@@ -384,8 +402,12 @@ function applyMovement(delta) {
 
   dragonPlayer.group.position.addScaledVector(dir, speed * delta);
 
-  // Face the camera-relative direction of travel.
-  const targetYaw = Math.atan2(dir.x, dir.z);
+  // Face the direction of travel. Three.js convention treats an object's
+  // local -Z as its forward (the yawPivot looks at the player from +Z, so the
+  // camera sits "behind" local -Z). We rotate the model 180° at load time so
+  // its visual forward lines up with local -Z. The yaw that makes local -Z
+  // point along `dir` is θ = atan2(-dir.x, -dir.z).
+  const targetYaw = Math.atan2(-dir.x, -dir.z);
   dragonPlayer.group.rotation.y = lerpAngle(
     dragonPlayer.group.rotation.y,
     targetYaw,
@@ -479,8 +501,13 @@ function crossfadeTo(nextAction, duration) {
 
 // --- Camera -----------------------------------------------------------------
 
-const CAMERA_OFFSET = new THREE.Vector3(0, 1.6, 4.6);
-const CAMERA_MIN_DIST = 1.6; // never get closer than this to the player
+// Push the camera back enough that even on cramped rooftops the dragon's
+// silhouette is clearly framed in the lower-center of the screen. The
+// pull-in raycast still tightens distance against walls but never closer
+// than CAMERA_MIN_DIST, which is sized against the player capsule + a body
+// thickness margin so the camera cannot collapse into the dragon mesh.
+const CAMERA_OFFSET = new THREE.Vector3(0, 1.4, 4.5);
+const CAMERA_MIN_DIST = 2.6;
 
 function updateCamera(delta) {
   // Track a point near the upper torso / head of the dragon so the framing

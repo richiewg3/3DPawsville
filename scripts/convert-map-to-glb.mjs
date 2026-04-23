@@ -241,9 +241,9 @@ if (sourceMeshes.length === 0) throw new Error('OBJ produced no meshes.');
 // 4. Bake transforms into positions.
 // ---------------------------------------------------------------------------
 //
-// The original OBJ authors Y pointing downward. First pass: flip around X
-// (y -> -y, z -> -z) to get Y-up. Also accumulate global bounds so we can
-// center horizontally, rest the ground on y=0, and apply a uniform scale.
+// First pass: keep source coordinates as-authored and only collect bounds.
+// We previously forced a Y/Z flip here, but that mirrored the world and made
+// sign/billboard text unreadable in-game for this map.
 
 let minX = Infinity, minY = Infinity, minZ = Infinity;
 let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
@@ -252,10 +252,8 @@ for (const mesh of sourceMeshes) {
   const pos = mesh.geometry.attributes.position.array;
   for (let i = 0; i < pos.length; i += 3) {
     const x = pos[i];
-    const y = -pos[i + 1]; // flip
-    const z = -pos[i + 2]; // flip
-    pos[i + 1] = y;
-    pos[i + 2] = z;
+    const y = pos[i + 1];
+    const z = pos[i + 2];
     if (x < minX) minX = x; else if (x > maxX) maxX = x;
     if (y < minY) minY = y; else if (y > maxY) maxY = y;
     if (z < minZ) minZ = z; else if (z > maxZ) maxZ = z;
@@ -268,7 +266,7 @@ const sizeZ = maxZ - minZ;
 const centerX = (maxX + minX) / 2;
 const centerZ = (maxZ + minZ) / 2;
 console.log(
-  `[convert-map] Source bounds size (Y-up): ${sizeX.toFixed(1)} x ${sizeY.toFixed(
+  `[convert-map] Source bounds size: ${sizeX.toFixed(1)} x ${sizeY.toFixed(
     1,
   )} x ${sizeZ.toFixed(1)}`,
 );
@@ -358,8 +356,8 @@ for (const mesh of sourceMeshes) {
       bucket.positions.push(px, py, pz);
       if (uv && texPath) {
         const u = uv[v * 2 + 0];
-        // glTF images have the v-axis inverted relative to OBJ.
-        const vv = 1 - uv[v * 2 + 1];
+        // Keep OBJ UV orientation as-authored. Inverting V here flips signage.
+        const vv = uv[v * 2 + 1];
         bucket.uvs.push(u, vv);
       } else {
         // Greybox / missing UV: push zeros. The material will not reference
